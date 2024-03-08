@@ -81,6 +81,7 @@ class Processor:
         '''
             Acknowledges by sending a processed message back to rabbitMQ
         '''
+        # TODO: This changes after the new changes in stella vslam
         pass
 
     def process(self):
