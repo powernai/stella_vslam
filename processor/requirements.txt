@@ -1,3 +1,8 @@
 python-dotenv
 boto3
 pika
+msgpack
+opencv-python
+scipy
+numpy
+gdown

@@ -249,10 +249,14 @@ RUN set -x && \
 
 WORKDIR /stella_vslam_examples/build/
 
+RUN apt-get update
+RUN apt-get install -y python3-pip
 RUN pip3 install --upgrade pip
-RUN pip3 install -r requirements.txt
 COPY processor .
+RUN pip3 install -r requirements.txt
 
-CMD ["python3", "./processor/t60_processor.py"]
+RUN curl -sL "https://github.com/stella-cv/FBoW_orb_vocab/raw/main/orb_vocab.fbow" -o orb_vocab.fbow
+
+CMD ["python3", "t60_processor.py"]
 
 # ENTRYPOINT ["/bin/bash"]

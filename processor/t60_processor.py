@@ -6,6 +6,9 @@ from urllib.parse import unquote
 import re
 import tempfile
 from concurrent import futures
+from rabbitMq.publisher import Publisher
+from extract_frames_and_coordinates import FrameCoordinatesExtractor
+from dotenv import load_dotenv
 
 
 '''
@@ -26,6 +29,20 @@ class Utils:
         match = re.match(regex, object_url)
         bucket, object_key = match.group(1), unquote(match.group(2))
         return [bucket, object_key]
+    
+    @staticmethod
+    def get_object_url(bucket: str, object_key: str) -> str:
+        """
+            Returns a valid S3 Object URL
+        """
+        return f'https://s3.amazonaws.com/{bucket}/{object_key}'
+
+    @staticmethod  
+    def extract_parent_key(object_key: str) -> str:
+        """
+        Returns the parent object key
+        """
+        return '/'.join(object_key.split('/')[:-1])
 
 
 class Processor:
@@ -36,18 +53,38 @@ class Processor:
             region_name=environ.get('AWS_BUCKET_REGION')
         )
         self.skip_frame = environ.get('SKIP_FRAME', 3)
-        self.video_path = environ.get('VIDEO_PATH')
-        self.camera_path = environ.get('CAMERA_PATH')
-        self.output_path = ''
+        self.video_path = environ.get('VIDEO_PATH', './aist_living_lab_1/video.mp4')
+        self.camera_path = environ.get('CAMERA_PATH','./camera.yaml')
+        self.output_path = 'messagepack.msg'
+        self.bucket = ''
+        self.parent_key = ''
+        self.dest_path = './360Images/'
 
     def localize(self):
         '''
             Run the stella-vslam localizer to extract the map information
+            --auto-term end is required to complete process in the background
         '''
         subprocess.run([
-            './run_video_slam', '-v', '/tmp/data/orb_vocab.fbow', '-m', self.video_path, '-c', self.camera_path, '--frame-skip', self.skip_frame, '--no-sleep',
-            '--map-db-in', self.output_path
-        ])
+                './run_video_slam', '-v', './orb_vocab.fbow', '-m', self.video_path, '-c', self.camera_path, '--frame-skip', str(self.skip_frame), '--no-sleep',
+                '--map-db-out', self.output_path, '--auto-term'
+            ])
+            
+    def extract_frames_and_coordinates(self):
+        '''
+            Extracts the msgpack from the output path
+        '''
+        service = FrameCoordinatesExtractor(self.output_path, self.video_path, self.dest_path) 
+        service.generate_frames_from_msg()
+        service.generate_final_coordinates_json()
+        
+    
+    def set_bucket_and_parent_key(self):
+        '''
+            Sets the object and parent key for the output path
+        '''
+        self.bucket, object_key = Utils.extract_s3_info(self.video_path)
+        self.parent_key = Utils.extract_parent_key(object_key)
 
     def download(self, source_url: str):
         """
@@ -71,17 +108,25 @@ class Processor:
         self.camera_local_path = self.download(self.camera_path)
         self.video_local_path = self.download(self.video_local_path)
 
-    def upload(self):
+    def upload(self, path):
         '''
             Uploads the processed data back to the target path
         '''
-        # TODO: This changes after the new changes in stella vslam
+        bucket, object_key = Utils.extract_s3_info(path)
+        self._S3_READ_CLIENT.upload_fileobj(open(self.output_path, 'rb'), bucket, object_key)
 
     def acknowledge(self):
         '''
             Acknowledges by sending a processed message back to rabbitMQ
         '''
         # TODO: This changes after the new changes in stella vslam
+        message= {
+            'status': 'done',
+            'type': 'stella_vslam',
+            'frames_url': self.extract_keyframes_output_path,
+        }
+        publisher = Publisher()
+        publisher.publish_message(body=message)
         pass
 
     def process(self):
@@ -90,6 +135,8 @@ class Processor:
         '''
         self.fetch_data()
         self.localize()
+        self.extract_frames_and_coordinates()
+        self.set_bucket_and_parent_key()
         self.upload()
         self.acknowledge()
 
@@ -98,3 +145,4 @@ if __name__ == '__main__':
 
     processor = Processor()
     processor.localize()
+    processor.extract_frames_and_coordinates()
