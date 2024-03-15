@@ -59,7 +59,7 @@ class FrameCoordinatesExtractor:
                 print(f"Error: Frame not found for Unix timestamp {value['ts']}")
 
             np.savetxt((os.path.join(self.dest_path, "keyframes.csv")), keyfrm_points, delimiter=",")
-            print("Finished, all frames generated successfully.")
+        print("Finished, all frames generated successfully.")
 
     def generate_final_coordinates_json(self):
         with open(self.msg_path, "rb") as f:
