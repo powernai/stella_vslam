@@ -60,17 +60,21 @@ class Processor:
             aws_access_key_id=environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=environ.get('AWS_SECRET_ACCESS_KEY')
         )
+        # getting the environment variables
         self.skip_frame = environ.get('SKIP_FRAME', 3)
-        self.video_path = environ.get('VIDEO_PATH', 'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4')
-        self.camera_path = environ.get('CAMERA_PATH','https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml')
+        self.video_path = environ.get('VIDEO_PATH')
+        self.camera_path = environ.get('CAMERA_PATH')
+        self.date = environ.get('DATE')
+        self.EBS_PATH = environ.get('EBS_PATH', None)
+        self.batch_size = environ.get('BATCH_SIZE', 10)
+        self.num_threads = environ.get('NUM_THREADS', 2)
+        
         self.output_path = 'messagepack.msg'
         self.bucket = ''
         self.parent_key = ''
         self.dest_path = './360Images/'
         self.coordinates_file = 'coordinates.json'
-        self.EBS_PATH = environ.get('EBS_PATH', None)
-        self.batch_size = environ.get('BATCH_SIZE', 10)
-        self.num_threads = environ.get('NUM_THREADS', 2)
+        
 
     def localize(self):
         '''
@@ -145,7 +149,7 @@ class Processor:
             Uploads the processed data back to the target path
         '''
         date_folder = datetime.datetime.now().strftime("%Y-%m-%d")
-        folder_path = os.path.join(date_folder, '360Images' )
+        folder_path = os.path.join(self.date, '360Images' )
         try:
             self._S3_READ_CLIENT.head_object(Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}")
             print("Folder already exists in S3, key: ", self.parent_key + f"/{folder_path}")
@@ -172,7 +176,6 @@ class Processor:
             for batch in batches:
                 # Submit upload task for the batch
                 futures.extend([executor.submit(self.upload_batch, self.bucket, file_name, self.parent_key + f"/{folder_path}/{file_name.split('/')[-1]}") for file_name in batch])
-                print(f"Uploaded {len(batch)} files to S3")
                 
             # Wait for all futures to complete
             for future in concurrent.futures.as_completed(futures):
@@ -180,15 +183,17 @@ class Processor:
                     future.result()  
                 except Exception as e:
                     print(f'Error uploading file: {e}')
+            self.num_imgs = len(files_to_upload)
+            print(f"Uploaded {len(files_to_upload)} files to S3")
 
         #upload coordinates.json file in s3
         file_obj_path = os.path.basename(self.coordinates_file)
         with open(file_obj_path, 'rb') as fp:
-            self._S3_READ_CLIENT.upload_fileobj(Fileobj=fp, Bucket=self.bucket, Key=self.parent_key + f"/{date_folder}/{self.coordinates_file}")
+            self._S3_READ_CLIENT.upload_fileobj(Fileobj=fp, Bucket=self.bucket, Key=self.parent_key + f"/{self.date}/{self.coordinates_file}")
         print(f"Uploaded coordinates JSON file " )
         
         self.images_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{folder_path}")
-        self.coordinates_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{date_folder}/{self.coordinates_file}")
+        self.coordinates_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{self.date}/{self.coordinates_file}")
         
 
     def acknowledge(self):
@@ -200,8 +205,15 @@ class Processor:
             'status': 'done',
             'type': 'stella_vslam',
             'images_url': self.images_url,
-            'coordinates_url': self.coordinates_url
-        }
+            'coordinates_url': self.coordinates_url,
+            'date': self.date,
+            'project_id': environ.get('PROJECT_ID'),
+            'video_version_id': environ.get('VIDEO_VERSION_ID'),
+            'camera_version_id': environ.get('CAMERA_VERSION_ID'), 
+            'msg_id': environ.get('MSG_ID'),
+            'image_count': self.num_imgs if self.num_imgs else 0 
+          }
+            
         publisher = Publisher()
         publisher.publish_message(body=message)
         print("Acknowledged: message sent with body: ", message)
@@ -214,7 +226,6 @@ class Processor:
             file_path = os.path.join(temp_dir, file)
             if os.path.isfile(file_path):
                 os.remove(file_path)
-                print(f"Deleted {file_path}")
 
     def process(self):
         '''
@@ -231,8 +242,24 @@ class Processor:
 
 if __name__ == '__main__':
 
-    processor = Processor()
-    processor.process()
-    # processor.set_bucket_and_parent_key()
-    # processor.upload()
+    all_videos_urls = os.environ.get('ALL_VIDEO_PATH',[{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4','version_id':"version-id-hardcoded"}])
+    all_camera_urls = os.environ.get('ALL_CAMERA_PATH',[{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml'}])
+    all_dates = os.environ.get('ALL_DATES',[datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")])
+    project_id = os.environ.get('PROJECT_ID', '516165165165')
+    msg_id = os.environ.get('MSG_ID', '44564563453543453')
+    environ['PROJECT_ID'] = project_id
+    environ['MSG_ID'] = msg_id
+    
+    count = len(all_dates)
+    for i in range(count):
+        environ['VIDEO_PATH'] = all_videos_urls[i]['url']
+        environ['CAMERA_PATH'] = all_camera_urls[i]['url']
+        environ['VIDEO_VERSION_ID']= all_videos_urls[i].get('version_id',None)
+        environ['CAMERA_VERSION_ID']= all_camera_urls[i].get('version_id',None)
+        formatted_date = datetime.datetime.strptime(all_dates[i], "%Y-%m-%dT%H:%M:%S.%fZ").strftime("%Y-%m-%d")  
+        environ['DATE'] = formatted_date
+        
+        processor = Processor()
+        processor.process()
+
 
