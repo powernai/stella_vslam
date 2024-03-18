@@ -55,17 +55,20 @@ class Utils:
 
 class Processor:
 
-    def __init__(self) -> None:
+    def __init__(self, video_path, camera_path, video_version_id, camera_version_id) -> None:
         self._S3_READ_CLIENT = client(
             "s3",
             region_name=environ.get('AWS_BUCKET_REGION'),
             aws_access_key_id=environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=environ.get('AWS_SECRET_ACCESS_KEY')
         )
+        self.video_path = video_path
+        self.camera_path = camera_path
+        self.video_version_id = video_version_id
+        self.camera_version_id = camera_version_id
+        
         # getting the environment variables
         self.skip_frame = environ.get('SKIP_FRAME', 3)
-        self.video_path = environ.get('VIDEO_PATH')
-        self.camera_path = environ.get('CAMERA_PATH')
         self.date = environ.get('DATE')
         self.EBS_PATH = environ.get('EBS_PATH', None)
         self.batch_size = environ.get('BATCH_SIZE', 10)
@@ -150,14 +153,15 @@ class Processor:
         '''
             Uploads the processed data back to the target path
         '''
-        date_folder = datetime.datetime.now().strftime("%Y-%m-%d")
-        folder_path = os.path.join(self.date, '360Images' )
+        folder_path = os.path.join(self.date, '360Images/' )
+        coordinates_path = os.path.join(self.date, 'coordinates/')
         try:
             self._S3_READ_CLIENT.head_object(Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}")
             print("Folder already exists in S3, key: ", self.parent_key + f"/{folder_path}")
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == '404':
                 self._S3_READ_CLIENT.put_object(Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}")
+                self._S3_READ_CLIENT.put_object(Bucket=self.bucket, Key=self.parent_key + f"/{coordinates_path}")
                 print("Created folder in S3, key: ", self.parent_key + f"/{folder_path}")
        
        
@@ -165,8 +169,8 @@ class Processor:
         files = os.listdir(self.dest_path)
         files_to_upload = [os.path.join(self.dest_path, file) for file in files if file.endswith('.jpg')]
         
-        batch_size = self.batch_size
-        num_threads = self.num_threads
+        batch_size = int(self.batch_size)
+        num_threads = int(self.num_threads)
         
         # Use ThreadPoolExecutor to upload files concurrently
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -177,7 +181,7 @@ class Processor:
             # Upload each batch of files concurrently
             for batch in batches:
                 # Submit upload task for the batch
-                futures.extend([executor.submit(self.upload_batch, self.bucket, file_name, self.parent_key + f"/{folder_path}/{file_name.split('/')[-1]}") for file_name in batch])
+                futures.extend([executor.submit(self.upload_batch, self.bucket, file_name, self.parent_key + f"/{folder_path}{file_name.split('/')[-1]}") for file_name in batch])
                 
             # Wait for all futures to complete
             for future in concurrent.futures.as_completed(futures):
@@ -191,11 +195,11 @@ class Processor:
         #upload coordinates.json file in s3
         file_obj_path = os.path.basename(self.coordinates_file)
         with open(file_obj_path, 'rb') as fp:
-            self._S3_READ_CLIENT.upload_fileobj(Fileobj=fp, Bucket=self.bucket, Key=self.parent_key + f"/{self.date}/{self.coordinates_file}")
+            self._S3_READ_CLIENT.upload_fileobj(Fileobj=fp, Bucket=self.bucket, Key=self.parent_key + f"/{coordinates_path}/{self.coordinates_file}")
         print(f"Uploaded coordinates JSON file " )
         
         self.images_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{folder_path}")
-        self.coordinates_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{self.date}/{self.coordinates_file}")
+        self.coordinates_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{coordinates_path}/{self.coordinates_file}")
         
 
     def acknowledge(self):
@@ -215,8 +219,8 @@ class Processor:
             'coordinates_url': self.coordinates_url,
             'date': self.date,
             'project_id': environ.get('PROJECT_ID'),
-            'video_version_id': environ.get('VIDEO_VERSION_ID'),
-            'camera_version_id': environ.get('CAMERA_VERSION_ID'), 
+            'video_version_id': self.video_version_id,
+            'camera_version_id': self.camera_version_id, 
             'msg_id': environ.get('MSG_ID'),
             'update_msg': update_msg,
             'image_count': self.num_imgs if self.num_imgs else 0 
@@ -264,15 +268,15 @@ if __name__ == '__main__':
     for i in range(total_count):
         print("all got",all_videos_urls)
         print(f"Processing {i+1} of {total_count}", all_videos_urls[i].get('url'))
-        environ['VIDEO_PATH'] = all_videos_urls[i]['url']
-        environ['CAMERA_PATH'] = all_camera_urls[i]['url']
-        environ['VIDEO_VERSION_ID']= all_videos_urls[i].get('version_id',None)
-        environ['CAMERA_VERSION_ID']= all_camera_urls[i].get('version_id',None)
+        video_path = all_videos_urls[i]['url']
+        camera_path = all_camera_urls[i]['url']
+        video_version_id= all_videos_urls[i].get('version_id',None)
+        camera_version_id= all_camera_urls[i].get('version_id',None)
         
         environ['DATE'] = datetime.datetime.strptime(all_dates[i], "%Y-%m-%dT%H:%M:%S.%fZ").strftime("%Y-%m-%d") 
         environ['processing_count'] = str(i+1)
                 
-        processor = Processor()
+        processor = Processor(video_path, camera_path, video_version_id, camera_version_id)
         processor.process()
 
 
