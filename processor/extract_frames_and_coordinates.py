@@ -80,7 +80,6 @@ class FrameCoordinatesExtractor:
                     trans_wc = - rot_wc * trans_cw
                     sample[needed_key] = [trans_wc[0, 0], trans_wc[1, 0], trans_wc[2, 0]]
                 elif needed_key == 'rot_cw':
-                    print(key_frames[key]["rot_cw"])
                     rot_cw = R.from_quat(key_frames[key]["rot_cw"]).as_matrix()
                     rot_wc = rot_cw.T
                     sample[needed_key] = [

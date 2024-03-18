@@ -30,6 +30,12 @@ def main(bin_fn, dest_fn):
                 trans_wc = - rot_wc * trans_cw
                 output[key][needed_key] = [
                     trans_wc[0, 0], trans_wc[1, 0], trans_wc[2, 0]]
+            elif needed_key == 'rot_cw':
+                    print(key_frames[key]["rot_cw"])
+                    rot_cw = R.from_quat(key_frames[key]["rot_cw"]).as_matrix()
+                    rot_wc = rot_cw.T
+                    output[key][needed_key] = [
+                        rot_wc[0, 0], rot_wc[1, 0], rot_wc[2, 0]]
             else:
                 output[key][needed_key] = key_frames[key][needed_key]
 

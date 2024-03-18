@@ -11,6 +11,10 @@ from rabbitMq.publisher import Publisher
 from extract_frames_and_coordinates import FrameCoordinatesExtractor
 from dotenv import load_dotenv
 import datetime
+import boto3
+import botocore
+import concurrent.futures
+import urllib
 
 
 '''
@@ -64,6 +68,9 @@ class Processor:
         self.parent_key = ''
         self.dest_path = './360Images/'
         self.coordinates_file = 'coordinates.json'
+        self.EBS_PATH = environ.get('EBS_PATH', None)
+        self.batch_size = environ.get('BATCH_SIZE', 10)
+        self.num_threads = environ.get('NUM_THREADS', 2)
 
     def localize(self):
         '''
@@ -93,18 +100,34 @@ class Processor:
 
     def download(self, source_url: str):
         """
-        Downloads the file object from Source (s3) and creates a temporary file
+        Downloads the file object from Source (S3) and creates a temporary file or downloads to EBS volume if provided.
         """
         if isinstance(source_url, dict):
             bucket, object_key = Utils.extract_s3_info(source_url.get("s3_path"))
         else:
-            # Handle the case when source_url is a string
             bucket, object_key = Utils.extract_s3_info(source_url)
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        self._S3_READ_CLIENT.download_fileobj(
-            Bucket=bucket, Key=object_key, Fileobj=temp_file)
-        return temp_file.name
 
+        ebs_volume_path = self.EBS_PATH
+        if ebs_volume_path is not None:
+            file_name = urllib.parse.unquote_plus(os.path.basename(object_key))
+            # Download the file to the specified EBS volume path with the original file name
+            ebs_file_path = os.path.join(ebs_volume_path, file_name)
+            self._S3_READ_CLIENT.download_file(
+                Bucket=bucket, Key=object_key, Filename=ebs_file_path)
+            return ebs_file_path
+        else:
+            # Create a temporary file in tmpfs
+            temp_file = tempfile.NamedTemporaryFile(delete=False)
+            try:
+                # Download to the temporary file
+                self._S3_READ_CLIENT.download_fileobj(
+                    Bucket=bucket, Key=object_key, Fileobj=temp_file)
+                return temp_file.name
+            except Exception as e:
+                # Clean up the temporary file if download fails
+                temp_file.close()
+                os.unlink(temp_file.name)
+                raise e
 
     def fetch_data(self):
         '''
@@ -114,6 +137,8 @@ class Processor:
         self.video_local_path = self.download(self.video_path)
         print("Downloaded the source data")
         
+    def upload_batch(self,bucket_name, file_name, key):
+        self._S3_READ_CLIENT.upload_file(file_name, bucket_name, key)
         
     def upload(self):
         '''
@@ -121,17 +146,40 @@ class Processor:
         '''
         date_folder = datetime.datetime.now().strftime("%Y-%m-%d")
         folder_path = os.path.join(date_folder, '360Images' )
-        self._S3_READ_CLIENT.put_object(Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}")
-        print("created folder in s3, key: ", self.parent_key + f"/{folder_path}")
-
-        for root, dirs, files in os.walk(self.dest_path):
-            for file in files:
-                if file.endswith(".jpg"):
-                    local_file_path = os.path.join(root, file)
-                    with open(local_file_path, 'rb') as fp:
-                        self._S3_READ_CLIENT.upload_fileobj(
-                            Fileobj=fp, Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}/{file}")
-            print("uploaded all images in :", self.parent_key + f"/{folder_path}")
+        try:
+            self._S3_READ_CLIENT.head_object(Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}")
+            print("Folder already exists in S3, key: ", self.parent_key + f"/{folder_path}")
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                self._S3_READ_CLIENT.put_object(Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}")
+                print("Created folder in S3, key: ", self.parent_key + f"/{folder_path}")
+       
+       
+        #get all files to upload
+        files = os.listdir(self.dest_path)
+        files_to_upload = [os.path.join(self.dest_path, file) for file in files if file.endswith('.jpg')]
+        
+        batch_size = self.batch_size
+        num_threads = self.num_threads
+        
+        # Use ThreadPoolExecutor to upload files concurrently
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            # Divide files into batches
+            batches = [files_to_upload[i:i+batch_size] for i in range(0, len(files_to_upload), batch_size)]
+            futures = []
+            
+            # Upload each batch of files concurrently
+            for batch in batches:
+                # Submit upload task for the batch
+                futures.extend([executor.submit(self.upload_batch, self.bucket, file_name, self.parent_key + f"/{folder_path}/{file_name.split('/')[-1]}") for file_name in batch])
+                print(f"Uploaded {len(batch)} files to S3")
+                
+            # Wait for all futures to complete
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()  
+                except Exception as e:
+                    print(f'Error uploading file: {e}')
 
         #upload coordinates.json file in s3
         file_obj_path = os.path.basename(self.coordinates_file)
@@ -185,4 +233,6 @@ if __name__ == '__main__':
 
     processor = Processor()
     processor.process()
+    # processor.set_bucket_and_parent_key()
+    # processor.upload()
 
