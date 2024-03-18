@@ -6,3 +6,5 @@ class ROUTING_KEY(Enum):
     DONE = "processed"
 
 EXCHANGE = 'file_processor'
+
+PROCESSING_TYPE = 'stella_vslam'

@@ -15,6 +15,8 @@ import boto3
 import botocore
 import concurrent.futures
 import urllib
+import ast
+from constants import PROCESSING_TYPE
 
 
 '''
@@ -200,10 +202,15 @@ class Processor:
         '''
             Acknowledges by sending a processed message back to rabbitMQ
         '''
+        update_msg = False
+        processed_count = environ.get('processing_count')
+        total_count = environ.get('TOTAL_COUNT')
+        if int(processed_count) == int(total_count):
+            update_msg = True
         # TODO: This changes after the new changes in stella vslam
         message= {
             'status': 'done',
-            'type': 'stella_vslam',
+            'type': PROCESSING_TYPE,
             'images_url': self.images_url,
             'coordinates_url': self.coordinates_url,
             'date': self.date,
@@ -211,6 +218,7 @@ class Processor:
             'video_version_id': environ.get('VIDEO_VERSION_ID'),
             'camera_version_id': environ.get('CAMERA_VERSION_ID'), 
             'msg_id': environ.get('MSG_ID'),
+            'update_msg': update_msg,
             'image_count': self.num_imgs if self.num_imgs else 0 
           }
             
@@ -242,23 +250,28 @@ class Processor:
 
 if __name__ == '__main__':
 
-    all_videos_urls = os.environ.get('ALL_VIDEO_PATH',[{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4','version_id':"version-id-hardcoded"}])
-    all_camera_urls = os.environ.get('ALL_CAMERA_PATH',[{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml'}])
-    all_dates = os.environ.get('ALL_DATES',[datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")])
+    all_videos_urls = ast.literal_eval(os.environ.get('ALL_VIDEO_PATH', str([{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4','version_id':"version-id-hardcoded"}])))
+    all_camera_urls = ast.literal_eval(os.environ.get('ALL_CAMERA_PATH',str([{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml','version_id':"version-id-hardcoded"}])))
+    all_dates = ast.literal_eval(os.environ.get('ALL_DATES',str([datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")])))
     project_id = os.environ.get('PROJECT_ID', '516165165165')
     msg_id = os.environ.get('MSG_ID', '44564563453543453')
     environ['PROJECT_ID'] = project_id
     environ['MSG_ID'] = msg_id
     
-    count = len(all_dates)
-    for i in range(count):
+    total_count = len(all_dates)
+    environ['TOTAL_COUNT'] = str(total_count)
+    
+    for i in range(total_count):
+        print("all got",all_videos_urls)
+        print(f"Processing {i+1} of {total_count}", all_videos_urls[i].get('url'))
         environ['VIDEO_PATH'] = all_videos_urls[i]['url']
         environ['CAMERA_PATH'] = all_camera_urls[i]['url']
         environ['VIDEO_VERSION_ID']= all_videos_urls[i].get('version_id',None)
         environ['CAMERA_VERSION_ID']= all_camera_urls[i].get('version_id',None)
-        formatted_date = datetime.datetime.strptime(all_dates[i], "%Y-%m-%dT%H:%M:%S.%fZ").strftime("%Y-%m-%d")  
-        environ['DATE'] = formatted_date
         
+        environ['DATE'] = datetime.datetime.strptime(all_dates[i], "%Y-%m-%dT%H:%M:%S.%fZ").strftime("%Y-%m-%d") 
+        environ['processing_count'] = str(i+1)
+                
         processor = Processor()
         processor.process()
 
