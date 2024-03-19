@@ -249,7 +249,7 @@ RUN set -x && \
 
 WORKDIR /stella_vslam_examples/build/
 RUN apt-get install at-spi2-core -y
-RUN apt-get install libcanberra-gtk-module libcanberra-gtk3-module -y
+RUN apt-get update && apt-get install -y libcanberra-gtk-module libcanberra-gtk3-module 
 RUN apt-get update
 RUN apt-get install -y python3-pip
 RUN pip3 install --upgrade pip
