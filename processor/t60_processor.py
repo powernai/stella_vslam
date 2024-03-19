@@ -17,6 +17,7 @@ import concurrent.futures
 import urllib
 import ast
 from constants import PROCESSING_TYPE
+import shutil
 
 
 '''
@@ -153,16 +154,16 @@ class Processor:
         '''
             Uploads the processed data back to the target path
         '''
-        folder_path = os.path.join(self.date, '360Images/' )
-        coordinates_path = os.path.join(self.date, 'coordinates/')
+        self.folder_path = os.path.join(self.date, '360Images/' )
+        self.coordinates_path = os.path.join(self.date, 'coordinates/')
         try:
-            self._S3_READ_CLIENT.head_object(Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}")
-            print("Folder already exists in S3, key: ", self.parent_key + f"/{folder_path}")
+            self._S3_READ_CLIENT.head_object(Bucket=self.bucket, Key=self.parent_key + f"/{self.folder_path}")
+            print("Folder already exists in S3, key: ", self.parent_key + f"/{self.folder_path}")
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == '404':
-                self._S3_READ_CLIENT.put_object(Bucket=self.bucket, Key=self.parent_key + f"/{folder_path}")
-                self._S3_READ_CLIENT.put_object(Bucket=self.bucket, Key=self.parent_key + f"/{coordinates_path}")
-                print("Created folder in S3, key: ", self.parent_key + f"/{folder_path}")
+                self._S3_READ_CLIENT.put_object(Bucket=self.bucket, Key=self.parent_key + f"/{self.folder_path}")
+                self._S3_READ_CLIENT.put_object(Bucket=self.bucket, Key=self.parent_key + f"/{self.coordinates_path}")
+                print("Created folder in S3, key: ", self.parent_key + f"/{self.folder_path}")
        
        
         #get all files to upload
@@ -181,7 +182,7 @@ class Processor:
             # Upload each batch of files concurrently
             for batch in batches:
                 # Submit upload task for the batch
-                futures.extend([executor.submit(self.upload_batch, self.bucket, file_name, self.parent_key + f"/{folder_path}{file_name.split('/')[-1]}") for file_name in batch])
+                futures.extend([executor.submit(self.upload_batch, self.bucket, file_name, self.parent_key + f"/{self.folder_path}{file_name.split('/')[-1]}") for file_name in batch])
                 
             # Wait for all futures to complete
             for future in concurrent.futures.as_completed(futures):
@@ -195,11 +196,11 @@ class Processor:
         #upload coordinates.json file in s3
         file_obj_path = os.path.basename(self.coordinates_file)
         with open(file_obj_path, 'rb') as fp:
-            self._S3_READ_CLIENT.upload_fileobj(Fileobj=fp, Bucket=self.bucket, Key=self.parent_key + f"/{coordinates_path}/{self.coordinates_file}")
-        print(f"Uploaded coordinates JSON file " )
+            self._S3_READ_CLIENT.upload_fileobj(Fileobj=fp, Bucket=self.bucket, Key=self.parent_key + f"/{self.coordinates_path}{self.coordinates_file}")
+        print(f"Uploaded coordinates.json file " )
         
-        self.images_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{folder_path}")
-        self.coordinates_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{coordinates_path}/{self.coordinates_file}")
+        self.images_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{self.folder_path}")
+        self.coordinates_url = Utils.get_object_url(self.bucket, self.parent_key + f"/{self.coordinates_path}{self.coordinates_file}")
         
 
     def acknowledge(self):
@@ -230,14 +231,16 @@ class Processor:
         publisher.publish_message(body=message)
         print("Acknowledged: message sent with body: ", message)
         
-    def delete_temp_dir(self):
+    def cleanup(self):
         # Clean up temporary files
-        temp_dir = tempfile.gettempdir()
-        temp_files = os.listdir(temp_dir)
-        for file in temp_files:
-            file_path = os.path.join(temp_dir, file)
-            if os.path.isfile(file_path):
-                os.remove(file_path)
+        print("cleanup started")
+        file_paths = [self.video_local_path, self.camera_local_path, self.output_path, self.coordinates_file, self.dest_path]
+        for path in file_paths:
+            if os.path.isfile(path):
+                os.remove(path)
+            elif os.path.isdir(path):
+                shutil.rmtree(path)
+        print("Deleted temporary files")
 
     def process(self):
         '''
@@ -249,16 +252,16 @@ class Processor:
         self.set_bucket_and_parent_key()
         self.upload()
         self.acknowledge()
-        self.delete_temp_dir()
+        self.cleanup()
 
 
 if __name__ == '__main__':
 
-    all_videos_urls = ast.literal_eval(os.environ.get('ALL_VIDEO_PATH', str([{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4','version_id':"version-id-hardcoded"}])))
-    all_camera_urls = ast.literal_eval(os.environ.get('ALL_CAMERA_PATH',str([{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml','version_id':"version-id-hardcoded"}])))
-    all_dates = ast.literal_eval(os.environ.get('ALL_DATES',str([datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")])))
-    project_id = os.environ.get('PROJECT_ID', '516165165165')
-    msg_id = os.environ.get('MSG_ID', '44564563453543453')
+    all_videos_urls = ast.literal_eval(os.environ.get('ALL_VIDEO_PATH', str([{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4','version_id':"1version-id-hardcoded"},{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4','version_id':"2version-id-hardcoded"}])))
+    all_camera_urls = ast.literal_eval(os.environ.get('ALL_CAMERA_PATH',str([{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml','version_id':"1version-id-hardcoded"},{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml','version_id':"2version-id-hardcoded"}])))
+    all_dates = ast.literal_eval(os.environ.get('ALL_DATES',str([datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ"),"2022-01-01T12:34:56.789012Z"])))
+    project_id = os.environ.get('PROJECT_ID', '63aa5983-8905-4506-97fd-53ed509cabf0')
+    msg_id = os.environ.get('MSG_ID', '63aa5983-8905-4506-97fd-53ed509cabf0')
     environ['PROJECT_ID'] = project_id
     environ['MSG_ID'] = msg_id
     
