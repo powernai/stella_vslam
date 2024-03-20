@@ -251,13 +251,28 @@ WORKDIR /stella_vslam_examples/build/
 RUN apt-get install at-spi2-core -y
 RUN apt-get update && apt-get install -y libcanberra-gtk-module libcanberra-gtk3-module 
 RUN apt-get update
+RUN apt install xorg -y
 RUN apt-get install -y python3-pip
 RUN pip3 install --upgrade pip
 COPY processor .
 RUN pip3 install -r requirements.txt
 
-RUN curl -sL "https://github.com/stella-cv/FBoW_orb_vocab/raw/main/orb_vocab.fbow" -o orb_vocab.fbow
 
-CMD ["python3", "t60_processor.py"]
+RUN curl -sL "https://github.com/stella-cv/FBoW_orb_vocab/raw/main/orb_vocab.fbow" -o orb_vocab.fbow
+# Install Xvfb and other dependencies
+RUN apt-get update && \
+    apt-get install -y xvfb x11vnc fluxbox && \
+    apt-get clean
+
+# Set display environment variable
+ENV DISPLAY=:99
+
+# Start Xvfb and run your application
+CMD Xvfb :99 -screen 0 1024x768x24 && \
+    export DISPLAY=:99 && \
+    fluxbox & \
+    python3 t60_processor.py
+
+# CMD ["python3", "t60_processor.py"]
 
 # ENTRYPOINT ["/bin/bash"]
