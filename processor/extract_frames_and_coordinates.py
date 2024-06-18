@@ -70,7 +70,13 @@ class FrameCoordinatesExtractor:
         needed_keys = ['trans_cw', 'rot_cw']
         output_object = {"coordinates": []}
 
-        for key in key_frames.keys():
+        # Numerically sorting 1 2 3 4 ... 99 100 101 .. instead of alphabetically sorting 1 10 100 101 102 ... 109 11 110 ..
+        keys = key_frames.keys()
+        keys = [int(key) for key in keys]
+        keys.sort()
+        keys = [str(key) for key in keys]
+        
+        for key in keys:
             sample = {}
             for needed_key in needed_keys:
                 if needed_key == 'trans_cw':
