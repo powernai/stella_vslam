@@ -82,8 +82,7 @@ class FrameCoordinatesExtractor:
                 elif needed_key == 'rot_cw':
                     rot_cw = R.from_quat(key_frames[key]["rot_cw"]).as_matrix()
                     rot_wc = rot_cw.T
-                    sample[needed_key] = [
-                        rot_wc[0, 0], rot_wc[1, 0], rot_wc[2, 0]]
+                    sample[needed_key] = R.from_matrix(rot_wc).as_euler('ZYX', degrees=True)
                 else:
                     sample[needed_key] = key_frames[key][needed_key]
 
