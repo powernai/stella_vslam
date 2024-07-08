@@ -257,11 +257,11 @@ class Processor:
 
 if __name__ == '__main__':
 
-    all_videos_urls = ast.literal_eval(os.environ.get('ALL_VIDEO_PATH', str([{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4','version_id':"1version-id-hardcoded"},{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/video.mp4','version_id':"2version-id-hardcoded"}])))
-    all_camera_urls = ast.literal_eval(os.environ.get('ALL_CAMERA_PATH',str([{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml','version_id':"1version-id-hardcoded"},{'url':'https://s3.amazonaws.com/ai.powern.website.assets/cpms/FWH/360Slam/equirectangular.yaml','version_id':"2version-id-hardcoded"}])))
-    all_dates = ast.literal_eval(os.environ.get('ALL_DATES',str([datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ"),"2022-01-01T12:34:56.789012Z"])))
-    project_id = os.environ.get('PROJECT_ID', '63aa5983-8905-4506-97fd-53ed509cabf0')
-    msg_id = os.environ.get('MSG_ID', '63aa5983-8905-4506-97fd-53ed509cabf0')
+    all_videos_urls = ast.literal_eval(os.environ.get('ALL_VIDEO_PATH', str([])))
+    all_camera_urls = ast.literal_eval(os.environ.get('ALL_CAMERA_PATH', str([])))
+    all_dates = ast.literal_eval(os.environ.get('ALL_DATES', str([])))
+    project_id = os.environ.get('PROJECT_ID', '')
+    msg_id = os.environ.get('MSG_ID', '')
     environ['PROJECT_ID'] = project_id
     environ['MSG_ID'] = msg_id
     
