@@ -4,6 +4,8 @@ import json
 import pika
 import argparse
 from constants import ROUTING_KEY, EXCHANGE
+import gzip
+
 
 
 class Publisher(BasicPikaClient):
@@ -43,12 +45,14 @@ class Publisher(BasicPikaClient):
 
             https://www.rabbitmq.com/amqp-0-9-1-reference.html#basic.publish 
         """
+         # Compress the body using gzip
+        compressed_body = gzip.compress(json.dumps(body).encode('utf-8'))
         self.channel.basic_publish(
-            exchange=self.exchange, routing_key=self.routing_key, body=json.dumps(
-                body),
+            exchange=self.exchange, routing_key=self.routing_key, body=compressed_body,
             properties=pika.BasicProperties(
                 delivery_mode=2,  # Make the message persistent
-                headers={'x-retries': 0}
+                headers={'x-retries': 0},
+                content_encoding='gzip'  # Specify content encoding as gzip
             )
         )
         super().close_channel()
