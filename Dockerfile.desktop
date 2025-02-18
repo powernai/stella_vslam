@@ -15,6 +15,7 @@ RUN set -x && \
   wget \
   curl \
   tar \
+  python3-pip \
   unzip && \
   : "g2o dependencies" && \
   apt-get install -y -qq \
@@ -249,10 +250,10 @@ RUN set -x && \
 
 WORKDIR /stella_vslam_examples/build/
 
-RUN pip3 install --upgrade pip
-RUN pip3 install -r requirements.txt
-COPY processor .
+# RUN pip3 install --upgrade pip
+# RUN pip3 install -r requirements.txt
+# COPY processor .
 
-CMD ["python3", "./processor/t60_processor.py"]
+# CMD ["python3", "./processor/t60_processor.py"]
 
-# ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["/bin/bash"]
