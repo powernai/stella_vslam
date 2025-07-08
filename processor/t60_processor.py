@@ -75,7 +75,7 @@ class Processor:
         self.batch_size = environ.get('BATCH_SIZE', 10)
         self.num_threads = environ.get('NUM_THREADS', 2)
         
-        self.output_path = 'messagepack.msg'
+        self.output_path = './messagepack.msg'
         self.bucket = ''
         self.parent_key = ''
         self.dest_path = './360Images/'
