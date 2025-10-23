@@ -15,7 +15,7 @@ class Publisher(BasicPikaClient):
 
     """
 
-    def __init__(self, exchange=EXCHANGE, routing_key=ROUTING_KEY.TO_BE.value):
+    def __init__(self, exchange=EXCHANGE, routing_key=ROUTING_KEY.DONE.value):
         super().__init__()
         self.exchange = exchange
         self.routing_key = routing_key

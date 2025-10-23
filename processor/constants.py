@@ -7,4 +7,4 @@ class ROUTING_KEY(Enum):
 
 EXCHANGE = 'file_processor'
 
-PROCESSING_TYPE = 'stella_vslam'
+PROCESSING_TYPE = 't60_convert'
