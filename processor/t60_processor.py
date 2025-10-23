@@ -1,4 +1,5 @@
 from boto3 import client
+from botocore.config import Config
 from os import environ
 from dotenv import load_dotenv
 import subprocess
@@ -34,7 +35,7 @@ class Utils:
         """ 
             Extracts Bucket and the object key from the S3 url resource
         """
-        regex = "https://s3\.amazonaws\.com/(.*?)/(.*)"
+        regex = "https://s3.*\.amazonaws\.com/(.*?)/(.*)"
         match = re.match(regex, object_url)
         bucket, object_key = match.group(1), unquote(match.group(2))
         return [bucket, object_key]
@@ -44,7 +45,11 @@ class Utils:
         """
             Returns a valid S3 Object URL
         """
-        return f'https://s3.amazonaws.com/{bucket}/{object_key}'
+        use_fips = 'gov' in environ.get('AWS_BUCKET_REGION')
+        if use_fips:
+            return f'https://s3-fips.{environ.get('AWS_BUCKET_REGION')}.amazonaws.com/{bucket}/{object_key}'
+        else:    
+            return f'https://s3.amazonaws.com/{bucket}/{object_key}'
 
     @staticmethod
     def extract_parent_key(object_key: str) -> str:
@@ -57,11 +62,16 @@ class Utils:
 class Processor:
 
     def __init__(self, video_path, camera_path, video_version_id, camera_version_id) -> None:
+        self.config = Config(
+            signature_version = 's3v4',
+            use_fips_endpoint=True
+        )
         self._S3_READ_CLIENT = client(
             "s3",
             region_name=environ.get('AWS_BUCKET_REGION'),
             aws_access_key_id=environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=environ.get('AWS_SECRET_ACCESS_KEY')
+            aws_secret_access_key=environ.get('AWS_SECRET_ACCESS_KEY'),
+            config=self.config
         )
         self.video_path = video_path
         self.camera_path = camera_path
