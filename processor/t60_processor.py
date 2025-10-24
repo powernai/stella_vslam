@@ -46,8 +46,9 @@ class Utils:
             Returns a valid S3 Object URL
         """
         use_fips = 'gov' in environ.get('AWS_BUCKET_REGION')
+        region = environ.get('AWS_BUCKET_REGION')
         if use_fips:
-            return f'https://s3-fips.{environ.get('AWS_BUCKET_REGION')}.amazonaws.com/{bucket}/{object_key}'
+            return f'https://s3-fips.{region}.amazonaws.com/{bucket}/{object_key}'
         else:    
             return f'https://s3.amazonaws.com/{bucket}/{object_key}'
 
