@@ -227,6 +227,7 @@ class Processor:
             'status': 'passed',
             'type': PROCESSING_TYPE,
             'update_msg': update_msg,
+            'notification_id': environ.get('NOTIFICATION_ID', ''),
             'data': {
                 'images_url': self.images_url,
                 'coordinates_url': self.coordinates_url,
@@ -277,8 +278,10 @@ if __name__ == '__main__':
     all_dates = ast.literal_eval(os.environ.get('ALL_DATES', str([])))
     project_id = os.environ.get('PROJECT_ID', '')
     msg_id = os.environ.get('MSG_ID', '')
+    notification_id = os.environ.get('NOTIFICATION_ID', '')
     environ['PROJECT_ID'] = project_id
     environ['MSG_ID'] = msg_id
+    environ['NOTIFICATION_ID'] = notification_id
 
     total_count = len(all_dates)
     environ['TOTAL_COUNT'] = str(total_count)
