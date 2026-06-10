@@ -1,0 +1,44 @@
+name: Deploy Stella VSLAM to Gov ECR
+
+on:
+  push:
+    branches: [wec-govcloud]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-gov-west-1
+  ECR_REGISTRY: 476154529181.dkr.ecr.us-gov-west-1.amazonaws.com
+  ECR_REPOSITORY: cpms-stella-vslam
+  IMAGE_TAG: latest
+
+jobs:
+  build-and-push:
+    name: Build and push to Gov ECR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_GOV_CLOUD_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.GOV_CLOUD_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.desktop
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:buildcache,mode=max

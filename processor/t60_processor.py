@@ -34,17 +34,30 @@ class Utils:
         """ 
             Extracts Bucket and the object key from the S3 url resource
         """
-        regex = "https://s3\.amazonaws\.com/(.*?)/(.*)"
+        regex = r"https://s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com/(.*?)/(.*)"
         match = re.match(regex, object_url)
+        if not match:
+            raise ValueError(f"Unable to parse S3 url: {object_url}")
         bucket, object_key = match.group(1), unquote(match.group(2))
         return [bucket, object_key]
+
+    @staticmethod
+    def get_s3_base_url() -> str:
+        """
+            Returns the S3 endpoint base URL for the configured region.
+            GovCloud and non us-east-1 regions require the regional endpoint.
+        """
+        region = os.environ.get("AWS_BUCKET_REGION", "")
+        if region and region != "us-east-1":
+            return f"https://s3.{region}.amazonaws.com"
+        return "https://s3.amazonaws.com"
 
     @staticmethod
     def get_object_url(bucket: str, object_key: str) -> str:
         """
             Returns a valid S3 Object URL
         """
-        return f'https://s3.amazonaws.com/{bucket}/{object_key}'
+        return f"{Utils.get_s3_base_url()}/{bucket}/{object_key}"
 
     @staticmethod
     def extract_parent_key(object_key: str) -> str:
