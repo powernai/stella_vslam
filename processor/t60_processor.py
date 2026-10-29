@@ -53,6 +53,16 @@ class Utils:
         """
         return '/'.join(object_key.split('/')[:-1])
 
+    @staticmethod
+    def get_output_folder(date: str, video_version_id: str) -> str:
+        """
+            Returns the output folder name, unique per video version so that
+            versions processed on the same date do not overwrite each other
+        """
+        if not video_version_id:
+            raise ValueError("video_version_id is required to build the output folder")
+        return f'{date}_{video_version_id}'
+
 
 class Processor:
 
@@ -71,6 +81,7 @@ class Processor:
         # getting the environment variables
         self.skip_frame = environ.get('SKIP_FRAME', 3)
         self.date = environ.get('DATE')
+        self.output_folder = Utils.get_output_folder(self.date, self.video_version_id)
         self.EBS_PATH = environ.get('EBS_PATH', None)
         self.batch_size = environ.get('BATCH_SIZE', 10)
         self.num_threads = environ.get('NUM_THREADS', 2)
@@ -155,8 +166,8 @@ class Processor:
         '''
             Uploads the processed data back to the target path
         '''
-        self.folder_path = os.path.join(self.date, '360Images/')
-        self.coordinates_path = os.path.join(self.date, 'coordinates/')
+        self.folder_path = os.path.join(self.output_folder, '360Images/')
+        self.coordinates_path = os.path.join(self.output_folder, 'coordinates/')
         try:
             self._S3_READ_CLIENT.head_object(
                 Bucket=self.bucket, Key=self.parent_key + f"/{self.folder_path}")
