@@ -24,7 +24,7 @@ class Publisher(BasicPikaClient):
     def declare_exchange(self):
         print(f"Trying to declare exchange ({self.exchange})...")
         self.channel.exchange_declare(
-            exchange=self.exchange, exchange_type=ExchangeType.direct)
+            exchange=self.exchange, exchange_type=ExchangeType.direct, durable=True)
 
     def build_and_push(self):
         """
